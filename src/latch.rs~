@@ -1,0 +1,22 @@
+use std::sync::atomic::{AtomicBool,Ordering};
+use std::sync::{Arc};
+
+pub struct Latch {
+    latch:Arc<AtomicBool>,
+}
+
+impl Latch {
+    pub fn new () -> Latch {
+        Latch {latch:Arc::new(AtomicBool::new(false))}
+    }
+    pub fn close (&self) -> bool {
+        if !self.latch.compare_and_swap(false,true,Ordering::SeqCst) {true}
+        else {false}
+    }
+    pub fn latched (&self) -> bool {
+        self.latch.load(Ordering::SeqCst)
+    }
+    pub fn clone (&self) -> Latch {
+        Latch {latch:self.latch.clone()}
+    }
+}
