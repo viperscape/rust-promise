@@ -1,0 +1,7 @@
+extern crate promise;
+use promise::Promise;
+
+fn main () {
+
+
+}

@@ -1,7 +1,11 @@
-use std::sync::{Arc, RWLock};
+extern crate alloc;
+use alloc::arc::strong_count;
 
+use std::sync::{Arc, RWLock};
+use std::sync::atomic::{Ordering};
 use latch::Latch;
  
+
 pub struct Promise<T> {
     pub data: Arc<RWLock<Option<T>>>,
     pub latch: Latch,
@@ -16,6 +20,7 @@ impl<T: Sync+Send> Promise<T> {
             let mut data = self.data.write();
             *data = Some(d);
             data.cond.broadcast(); //wake up others
+            data.downgrade();
             true
         }
         else {false}
@@ -23,9 +28,9 @@ impl<T: Sync+Send> Promise<T> {
  
     pub fn apply (&self, f: |&T| -> T) -> Result<T,String> {
         if !self.latch.latched() { 
-            let vw = self.data.write();
+            let vw = self.data.write(); //lock
+            if strong_count(&self.data) < 2 { return Err("safety hatch, promise not capable".to_string()) }
             vw.cond.wait();
-            vw.downgrade(); //do this?
         }
         
         let v = self.data.read();
@@ -40,14 +45,24 @@ impl<T: Sync+Send> Promise<T> {
                  latch: self.latch.clone()}
     }
  
-    pub fn destroy (self) -> Result<String,String> { //promise is moved
+    pub fn destroy (&self) -> Result<String,String> { //promise is moved
         if self.latch.close() {
             let mut data = self.data.write();
             *data = None;
             data.cond.broadcast(); //wake up others
+            data.downgrade();
             Ok("Promise signaled early".to_string())
         }
         else { Err("promise already delivered".to_string()) }
+    }
+}
+
+#[unsafe_destructor]
+/// Special Drop for Promise
+/// we don't want to hang readers on a local panic
+impl<T: Sync+Send> Drop for Promise<T> {
+    fn drop (&mut self) {
+        if strong_count(&self.data) < 3 { self.destroy(); }
     }
 }
 
@@ -81,6 +96,20 @@ mod tests {
         spawn(proc() {
             p2.destroy();
         });
+        p.apply(|x| *x).unwrap();
+    }
+
+    #[test]
+    #[should_fail]
+    fn test_promise_threaded_panic_safely() {
+        let p: Promise<int> = Promise::new();
+        let p2 = p.clone();
+
+        spawn (proc () {
+            p2.latch.latched(); //moves p2 into proc
+            panic!("proc dead"); //destroys promise, triggers wake on main proc
+        });
+        
         p.apply(|x| *x).unwrap();
     }
 }
