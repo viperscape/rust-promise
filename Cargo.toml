@@ -1,5 +1,5 @@
 [package]
 
-name = "rust-promise"
+name = "promise"
 version = "0.0.1"
-authors = ["cgill"]
+authors = ["Chris Gill"]
