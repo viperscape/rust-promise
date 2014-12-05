@@ -45,7 +45,7 @@ impl<T: Sync+Send> Promise<T> {
                  latch: self.latch.clone()}
     }
  
-    pub fn destroy (&self) -> Result<String,String> { //promise is moved
+    pub fn destroy (&self) -> Result<String,String> {
         if self.latch.close() {
             let mut data = self.data.write();
             *data = None;
