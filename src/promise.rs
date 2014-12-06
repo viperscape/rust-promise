@@ -1,39 +1,42 @@
 extern crate alloc;
 use alloc::arc::strong_count;
 
-use std::sync::{Arc, RWLock};
+use std::sync::{Arc, Mutex, Condvar};
 use std::sync::atomic::{Ordering};
 use latch::Latch;
  
 
 pub struct Promise<T> {
-    pub data: Arc<RWLock<Option<T>>>,
+    pub data: Arc<(Mutex<Option<T>>, Condvar)>,
     pub latch: Latch,
 }
 
 impl<T: Sync+Send> Promise<T> {
     pub fn new () -> Promise<T> {
-        Promise {data: Arc::new(RWLock::new(None)), latch: Latch::new()}
+        Promise {data: Arc::new((Mutex::new(None), Condvar::new())), latch: Latch::new()}
     }
     pub fn deliver (&self, d:T) -> bool {
         if self.latch.close() {
-            let mut data = self.data.write();
+            let &(ref lock, ref cond) = &*self.data; 
+            let mut data = lock.lock();
             *data = Some(d);
-            data.cond.broadcast(); //wake up others
-            data.downgrade();
+            cond.notify_all(); //wake up others
+           // data.downgrade();
             true
         }
         else {false}
     }
  
+    //potentially blocking for other readers if fn applied is cpu/disk intensive
     pub fn apply (&self, f: |&T| -> T) -> Result<T,String> {
+        let &(ref lock, ref cond) = &*self.data;
         if !self.latch.latched() { 
-            let vw = self.data.write(); //lock
             if strong_count(&self.data) < 2 { return Err("safety hatch, promise not capable".to_string()) }
-            vw.cond.wait();
+            let v = lock.lock(); //lock
+            cond.wait(&v);
         }
         
-        let v = self.data.read();
+        let v = lock.lock();
         match *v {
             Some(ref r) => Ok(f(r)),
             None => Err("promise signaled early, value not present!".to_string()),
@@ -47,10 +50,11 @@ impl<T: Sync+Send> Promise<T> {
  
     pub fn destroy (&self) -> Result<String,String> {
         if self.latch.close() {
-            let mut data = self.data.write();
+            let &(ref lock, ref cond) = &*self.data;
+            let mut data = lock.lock();
             *data = None;
-            data.cond.broadcast(); //wake up others
-            data.downgrade();
+            cond.notify_all(); //wake up others
+            //data.downgrade();
             Ok("Promise signaled early".to_string())
         }
         else { Err("promise already delivered".to_string()) }
