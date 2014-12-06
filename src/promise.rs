@@ -1,4 +1,6 @@
+//extern crate test;
 extern crate alloc;
+
 use alloc::arc::strong_count;
 
 use std::sync::{Arc, Mutex, Condvar};
@@ -21,7 +23,7 @@ impl<T: Sync+Send> Promise<T> {
             let mut data = lock.lock();
             *data = Some(d);
             cond.notify_all(); //wake up others
-           // data.downgrade();
+
             true
         }
         else {false}
@@ -30,13 +32,14 @@ impl<T: Sync+Send> Promise<T> {
     //potentially blocking for other readers if fn applied is cpu/disk intensive
     pub fn apply (&self, f: |&T| -> T) -> Result<T,String> {
         let &(ref lock, ref cond) = &*self.data;
+        let v = lock.lock();
+        
         if !self.latch.latched() { 
             if strong_count(&self.data) < 2 { return Err("safety hatch, promise not capable".to_string()) }
-            let v = lock.lock(); //lock
             cond.wait(&v);
         }
         
-        let v = lock.lock();
+        
         match *v {
             Some(ref r) => Ok(f(r)),
             None => Err("promise signaled early, value not present!".to_string()),
@@ -54,7 +57,7 @@ impl<T: Sync+Send> Promise<T> {
             let mut data = lock.lock();
             *data = None;
             cond.notify_all(); //wake up others
-            //data.downgrade();
+
             Ok("Promise signaled early".to_string())
         }
         else { Err("promise already delivered".to_string()) }
@@ -72,8 +75,11 @@ impl<T: Sync+Send> Drop for Promise<T> {
 
 #[cfg(test)]
 mod tests {
+    extern crate test;
     use Promise;
+    use std::comm::channel;
     
+
     #[test]
     fn test_promise_linear() {
         let p: Promise<int> = Promise::new();
@@ -116,4 +122,25 @@ mod tests {
         
         p.apply(|x| *x).unwrap();
     }
+
+
+    #[bench]
+    fn bench_promise_linear(b: &mut test::Bencher) {
+        b.iter(|| {
+            let p: Promise<int> = Promise::new();
+            p.deliver(1);
+            p.apply(|x| *x).unwrap();
+        });
+    }
+
+    #[bench]
+    fn bench_channel_linear(b: &mut test::Bencher) {
+        b.iter(|| {
+            let (cs,cr) = channel::<int>();
+            cs.send(1);
+            cr.recv();
+        });
+    }
 }
+
+
