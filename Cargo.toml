@@ -1,7 +1,7 @@
 [package]
 
 name = "promise"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Chris Gill"]
 description = "promise sync primitive"
 repository = "https://github.com/viperscape/rust-promise"
