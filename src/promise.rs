@@ -1,10 +1,7 @@
-//extern crate test;
 extern crate alloc;
 
 use alloc::arc::strong_count;
-
 use std::sync::{Arc, Mutex, Condvar};
-use std::sync::atomic::{Ordering};
 use latch::Latch;
  
 
@@ -78,7 +75,7 @@ mod tests {
     extern crate test;
     use Promise;
     use std::comm::channel;
-    
+    use std::thread::Thread;
 
     #[test]
     fn test_promise_linear() {
@@ -92,7 +89,7 @@ mod tests {
     fn test_promise_threaded() {
         let p: Promise<int> = Promise::new();
         let p2 = p.clone();
-        spawn(proc() {
+        Thread::spawn(move || {
             assert_eq!(p2.deliver(1),true);
         });
         assert_eq!(p.apply(|x| *x).unwrap(),1); //waits on spawned thread
@@ -103,7 +100,7 @@ mod tests {
     fn test_promise_threaded_destroyed() {
         let p: Promise<int> = Promise::new();
         let p2 = p.clone();
-        spawn(proc() {
+        Thread::spawn(move || {
             p2.destroy();
         });
         p.apply(|x| *x).unwrap();
@@ -115,9 +112,9 @@ mod tests {
         let p: Promise<int> = Promise::new();
         let p2 = p.clone();
 
-        spawn (proc () {
-            p2.latch.latched(); //moves p2 into proc
+        Thread::spawn (move || {
             panic!("proc dead"); //destroys promise, triggers wake on main proc
+            p2.deliver(1)
         });
         
         p.apply(|x| *x).unwrap();
