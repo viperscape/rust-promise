@@ -22,3 +22,11 @@ fn main () {
     println!("{:?}",v); //Ok(3654177790282180513)
 }
 ```
+
+#### benchmarks ####
+These represent some basic benchmarking, real speeds could vary significantly. 
+```
+test latch::tests::bench_latch            ... bench:        45 ns/iter (+/- 0)
+test promise::tests::bench_channel_linear ... bench:       758 ns/iter (+/- 7)
+test promise::tests::bench_promise_linear ... bench:         1 ns/iter (+/- 0)
+```
