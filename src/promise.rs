@@ -108,7 +108,8 @@ impl<T: Send+'static> Promiser<T> {
         r
     }
 
-    fn wakeup (&self) {
+    /// only call manually if you intend to destroy the promise
+    pub fn wakeup (&self) {
         //let's wake everyone up!
         let mut s = self.sink.try_recv();
         while s.is_ok() {
