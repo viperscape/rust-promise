@@ -12,28 +12,13 @@ example usage:
 ``` rust
 extern crate promise;
 use promise::Promise;
+use std::rand;
 
 fn main () {
-    let p: Promise<int> = Promise::new();
-    let p2 = p.clone();
-    spawn(proc() {
-        println!("task2: promise result {}", (p.apply(|x| *x).unwrap())); //waits on spawned thread
-    });
-    println!("task1: promise delivered {}",p2.deliver(1));
-
-    let p: Promise<int> = Promise::new();
-    let p2 = p.clone();
-    spawn(proc() {
-        println!("task2: promise delivered {}",p2.deliver(5));
-    });
-
-    println!("task1: promise result {}", (p.apply(|x| *x-1).unwrap())); //waits on spawned thread
+    let (pt,pr) = Promise::new();
+    let bd = vec![rand::random::<u64>();1000];
+    pt.deliver(bd);
+    let v = pr.with(|x| x[999]); //copy value, returns inside of Result
+    println!("{:?}",v); //Ok(3654177790282180513)
 }
-
-//task1: promise delivered true
-//task2: promise result 1
-
-//task2: promise delivered true
-//task1: promise result 4
-
 ```
