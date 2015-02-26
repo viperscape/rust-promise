@@ -12,7 +12,8 @@ use std::cell::{UnsafeCell};
 #[derive(Clone)]
 pub struct Promise<T> {
     pub data: Arc<UnsafeCell<Option<T>>>,
-    pub latch: Latch,
+    pub init: Latch,
+    pub commit: Latch,
 }
 
 #[derive(Clone)]
@@ -34,7 +35,8 @@ impl<T: Send+'static> Promise<T> {
         let mut d: Option<T> = None;
 
         let p = Promise { data: Arc::new(UnsafeCell::new(d)),
-                          latch: Latch::new() };
+                          init: Latch::new(),
+                          commit: Latch::new()};
 
         let p2 = p.clone();
         let pt = Promiser { p: p,
@@ -47,13 +49,15 @@ impl<T: Send+'static> Promise<T> {
 
     pub fn clone (&self) -> Promise<T> {
         Promise { data: self.data.clone(),
-                  latch: self.latch.clone() }
+                  init: self.init.clone(),
+                  commit: self.commit.clone(),}
     }
 
     fn _deliver (&self, mut d:Option<T>) -> bool {
-        if self.latch.close() {
+        if self.init.close() {
             let mut w = self.data.get();
             unsafe{ *w = d; }
+            self.commit.close();
             return true
         }
         
@@ -64,7 +68,8 @@ impl<T: Send+'static> Promise<T> {
         self._deliver(Some(d))
     }
 
-    pub fn with<W,F:FnMut(&T)->W> (&self, mut f:F) -> Result<W,String> {
+    ///should be called only from promiser/promisee-- public for now tho
+    pub fn _with<W,F:FnMut(&T)->W> (&self, mut f:F) -> Result<W,String> {
         let v = self.data.get();
 
         unsafe {
@@ -125,17 +130,23 @@ impl<T: Send+'static> Drop for Promiser<T> {
 
 impl<T: Send+'static> Promisee<T> {
     pub fn with<W,F:FnMut(&T)->W> (&self, mut f:F) -> Result<W,String> {
-        if !self.p.latch.latched() { 
-            if strong_count(&self.p.data) < 2 { 
-                return Err("safety hatch, promise not capable".to_string());
-            }
+        if !self.p.commit.latched() { //not finalized?
+            if !self.p.init.latched() { //has it been locked?
+                if strong_count(&self.p.data) < 2 { 
+                    return Err("safety hatch, promise not capable".to_string());
+                }
 
-            //sleep thread
-            self.sink.send(thread::current());
-            thread::park();
+                //todo: consider removing this, atomicbool should take care of above logic
+                //might need to change latch to seqcst tho
+                if !self.p.commit.latched() { //check again!
+                    //sleep thread
+                    self.sink.send(thread::current());
+                    thread::park();
+                }
+            }
         }
 
-        self.p.with(f)
+        self.p._with(f)
     }
 }
 
