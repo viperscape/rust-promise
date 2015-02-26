@@ -1,7 +1,5 @@
 #![feature(unsafe_destructor)]
-
-extern crate alloc;
-use alloc::arc::strong_count;
+#![feature(alloc)]
 
 pub use latch::Latch;
 pub use promise::Promise;
