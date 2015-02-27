@@ -2,7 +2,7 @@ extern crate alloc;
 
 use self::alloc::arc::strong_count;
 use std::sync::{Arc};
-use std::sync::atomic::{AtomicPtr,Ordering};
+//use std::sync::atomic::{AtomicPtr,Ordering};
 use latch::Latch;
 use std::sync::mpsc::{channel,Sender,Receiver};
 use std::thread::{Thread};
@@ -32,7 +32,7 @@ unsafe impl<T: Sync> Sync for Promise<T> {}
 impl<T: Send+'static> Promise<T> {
     pub fn new () -> (Promiser<T>,Promisee<T>) {
         let (t,r) = channel();
-        let mut d: Option<T> = None;
+        let d: Option<T> = None;
 
         let p = Promise { data: Arc::new(UnsafeCell::new(d)),
                           init: Latch::new(),
@@ -53,9 +53,9 @@ impl<T: Send+'static> Promise<T> {
                   commit: self.commit.clone(),}
     }
 
-    fn _deliver (&self, mut d:Option<T>) -> bool {
+    fn _deliver (&self, d:Option<T>) -> bool {
         if self.init.close() {
-            let mut w = self.data.get();
+            let w = self.data.get();
             unsafe{ *w = d; }
             self.commit.close();
             return true
@@ -64,7 +64,7 @@ impl<T: Send+'static> Promise<T> {
         return false
     }
 
-    pub fn deliver (&self, mut d:T) -> bool {
+    pub fn deliver (&self, d:T) -> bool {
         self._deliver(Some(d))
     }
 
@@ -130,18 +130,17 @@ impl<T: Send+'static> Drop for Promiser<T> {
 
 
 impl<T: Send+'static> Promisee<T> {
-    pub fn with<W,F:FnMut(&T)->W> (&self, mut f:F) -> Result<W,String> {
+    pub fn with<W,F:FnMut(&T)->W> (&self,f:F) -> Result<W,String> {
         if !self.p.commit.latched() { //not finalized?
             if !self.p.init.latched() { //has it been locked?
                 if strong_count(&self.p.data) < 2 { 
                     return Err("safety hatch, promise not capable".to_string());
                 }
 
-                //todo: consider removing this, atomicbool should take care of above logic
+                //todo: consider removing below ifstatement, atomicbool should take care of above logic
                 //might need to change latch to seqcst tho
+                self.sink.send(thread::current()); //signal promiser
                 if !self.p.commit.latched() { //check again!
-                    //sleep thread
-                    self.sink.send(thread::current());
                     thread::park();
                 }
             }
