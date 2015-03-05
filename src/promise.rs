@@ -148,6 +148,11 @@ impl<T: Send+'static> Promisee<T> {
 
         self.p._with(f)
     }
+    
+    pub fn clone(&self) -> Promisee<T> {
+        Promisee { p: self.p.clone(),
+                   sink: self.sink.clone(), }
+    }
 }
 
 
@@ -165,6 +170,8 @@ mod tests {
         assert_eq!(pt.deliver(1),true);
         assert_eq!(pt.deliver(2),false);
         assert_eq!(pr.with(|x| *x).unwrap(),1);
+        let pr2 = pr.clone();
+        assert_eq!(pr2.with(|x| *x).unwrap(),1);
     }
 
     #[test]
