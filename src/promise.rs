@@ -148,7 +148,12 @@ impl<T: Send+'static> Promisee<T> {
 
         self.p._with(f)
     }
-    
+
+    pub fn get(&self) -> &Option<T> {
+        let d = self.p.data.get();
+        unsafe { &*d }
+    }
+
     pub fn clone(&self) -> Promisee<T> {
         Promisee { p: self.p.clone(),
                    sink: self.sink.clone(), }
