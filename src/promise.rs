@@ -195,6 +195,20 @@ mod tests {
         pr.with(|x| *x).unwrap();
     }
 
+    #[bench]
+    fn bench_promise_build(b: &mut test::Bencher) {
+        b.iter(|| {
+            let (pt,pr) = Promise::<u8>::new();
+        });
+    }
+
+    #[bench]
+    fn bench_promise_clone(b: &mut test::Bencher) {
+        let (pt,pr) = Promise::<u8>::new();
+        b.iter(|| {
+            pr.clone();
+        });
+    }
 
     #[bench]
     fn bench_promise(b: &mut test::Bencher) {
