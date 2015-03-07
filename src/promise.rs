@@ -8,6 +8,7 @@ use std::sync::mpsc::{channel,Sender,Receiver};
 use std::thread::{Thread};
 use std::thread;
 use std::cell::{UnsafeCell};
+use std::mem;
 
 #[derive(Clone)]
 pub struct Promise<T> {
@@ -131,6 +132,13 @@ impl<T: Send+'static> Drop for Promiser<T> {
 
 impl<T: Send+'static> Promisee<T> {
     pub fn with<W,F:FnMut(&T)->W> (&self,f:F) -> Result<W,String> {
+        match self.wait() {
+            Ok(_) => self.p._with(f),
+            Err(er) => Err(er),
+        }
+    }
+
+    pub fn wait(&self) -> Result<(),String> {
         if !self.p.commit.latched() { //not finalized?
             if !self.p.init.latched() { //has it been locked?
                 if strong_count(&self.p.data) < 2 { 
@@ -145,13 +153,31 @@ impl<T: Send+'static> Promisee<T> {
                 }
             }
         }
-
-        self.p._with(f)
+        Ok(())
     }
 
-    pub fn get(&self) -> &Option<T> {
-        let d = self.p.data.get();
-        unsafe { &*d }
+    pub fn get(&self) -> Result<Option<&T>,String> {
+        if !self.p.init.latched() { //has it been locked?
+            if strong_count(&self.p.data) < 2 { 
+                return Err("safety hatch, promise not capable".to_string());
+            }
+            else { Ok(None) } //promise is ok, but no data
+        }
+        else { //initial lock set
+            if self.p.commit.latched() { //finalized?
+                let d = self.p.data.get();
+                unsafe {
+                    let _d: Option<&T> = mem::transmute(&*d);
+                    let r = match _d {
+                        Some(_) => true,
+                        None => false,
+                    };
+                    if r { Ok(_d) }
+                    else { Err("promise signaled early, value not present!".to_string()) }
+                }
+            }
+            else { Ok(None) } //not finalized
+        }
     }
 
     pub fn clone(&self) -> Promisee<T> {
@@ -173,6 +199,7 @@ mod tests {
     fn test_promise_linear() {
         let (pt,pr) = Promise::new();
         assert_eq!(pt.deliver(1),true);
+        assert_eq!(pr.get(),Ok(Some(&1)));
         assert_eq!(pt.deliver(2),false);
         assert_eq!(pr.with(|x| *x).unwrap(),1);
         let pr2 = pr.clone();
