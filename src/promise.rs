@@ -167,12 +167,11 @@ impl<T: Send+'static> Promisee<T> {
             if self.p.commit.latched() { //finalized?
                 let d = self.p.data.get();
                 unsafe {
-                    let _d: Option<&T> = mem::transmute(&*d);
-                    let r = match _d {
+                    let r = match *d {
                         Some(_) => true,
                         None => false,
                     };
-                    if r { Ok(_d) }
+                    if r { Ok(mem::transmute(&*d)) }
                     else { Err("promise signaled early, value not present!".to_string()) }
                 }
             }
@@ -225,6 +224,17 @@ mod tests {
         });
         
         pr.with(|x| *x).unwrap();
+    }
+
+    #[test]
+    fn test_promise_threaded_panic_safely2() {
+        let (pt,pr) = Promise::new();
+        Thread::spawn (move || {
+            panic!("proc dead"); //destroys promise, triggers wake on main proc
+            pt.deliver(1);
+        });
+        
+        pr.get();
     }
 
     #[bench]
