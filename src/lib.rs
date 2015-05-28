@@ -1,10 +1,9 @@
 #![feature(unsafe_destructor)]
 #![feature(alloc)]
+#![feature(test)]
 
 pub use latch::Latch;
 pub use promise::{Promise,Promisee,Promiser};
-pub use fence::Fence;
 
 pub mod latch;
 pub mod promise;
-pub mod fence;

@@ -11,25 +11,26 @@ use std::cell::{UnsafeCell};
 use std::mem;
 
 #[derive(Clone)]
-pub struct Promise<T> {
+pub struct Promise<T: Send+'static> {
     pub data: Arc<UnsafeCell<Option<T>>>,
     pub init: Latch,
     pub commit: Latch,
 }
 
 #[derive(Clone)]
-pub struct Promisee<T> {
+pub struct Promisee<T: Send+'static> {
     pub p: Promise<T>,
     sink: Sender<Thread>,
 }
 
-pub struct Promiser<T> {
+pub struct Promiser<T: Send+'static> {
     p: Promise<T>,
     sink: Receiver<Thread>,
 }
 
 unsafe impl<T: Send> Send for Promise<T> {}
 unsafe impl<T: Sync> Sync for Promise<T> {}
+
 impl<T: Send+'static> Promise<T> {
     pub fn new () -> (Promiser<T>,Promisee<T>) {
         let (t,r) = channel();
@@ -90,10 +91,9 @@ impl<T: Send+'static> Promise<T> {
     }
 }
 
-#[unsafe_destructor]
 /// Special Drop for Promise
 /// we don't want to hang readers on a local panic
-impl<T: Sync+Send+'static> Drop for Promise<T> {
+impl<T: Send+'static> Drop for Promise<T> {
     fn drop (&mut self) {
         if strong_count(&self.data) < 3 { self.destroy(); }
     }
@@ -120,7 +120,7 @@ impl<T: Send+'static> Promiser<T> {
     }
 }
 
-#[unsafe_destructor]
+
 impl<T: Send+'static> Drop for Promiser<T> {
     fn drop (&mut self) {
         self.p.destroy();
@@ -189,10 +189,12 @@ impl<T: Send+'static> Promisee<T> {
 #[cfg(test)]
 mod tests {
     extern crate test;
+    extern crate rand;
+    
     use Promise;
     use std::sync::mpsc::channel;
-    use std::thread::Thread;
-    use std::rand;
+    use std::thread;
+    use self::rand::random;
 
     #[test]
     fn test_promise_linear() {
@@ -208,17 +210,17 @@ mod tests {
     #[test]
     fn test_promise_threaded() {
         let (pt,pr) = Promise::new();
-        Thread::spawn(move || {
+        thread::spawn(move || {
             assert_eq!(pt.deliver(1),true);
         });
         assert_eq!(pr.with(|x| *x).unwrap(),1); //waits on spawned thread
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn test_promise_threaded_panic_safely() {
         let (pt,pr) = Promise::new();
-        Thread::spawn (move || {
+        thread::spawn (move || {
             panic!("proc dead"); //destroys promise, triggers wake on main proc
             pt.deliver(1);
         });
@@ -229,7 +231,7 @@ mod tests {
     #[test]
     fn test_promise_threaded_panic_safely2() {
         let (pt,pr) = Promise::new();
-        Thread::spawn (move || {
+        thread::spawn (move || {
             panic!("proc dead"); //destroys promise, triggers wake on main proc
             pt.deliver(1);
         });
@@ -280,7 +282,7 @@ mod tests {
             let mut vpr = vec![pr.clone();10];
             let bd = vec![rand::random::<u64>();1000];
             pt.deliver(bd);
-            for n in vpr.drain() {
+            for n in vpr.iter() {
                 n.with(|x| x[999]);
             }
         });
