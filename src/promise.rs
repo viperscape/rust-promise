@@ -1,6 +1,5 @@
 extern crate alloc;
 
-use self::alloc::arc::strong_count;
 use std::sync::{Arc};
 //use std::sync::atomic::{AtomicPtr,Ordering};
 use latch::Latch;
@@ -95,7 +94,7 @@ impl<T: Send+'static> Promise<T> {
 /// we don't want to hang readers on a local panic
 impl<T: Send+'static> Drop for Promise<T> {
     fn drop (&mut self) {
-        if strong_count(&self.data) < 3 { self.destroy(); }
+        if Arc::strong_count(&self.data) < 3 { self.destroy(); }
     }
 }
 
@@ -141,7 +140,7 @@ impl<T: Send+'static> Promisee<T> {
     pub fn wait(&self) -> Result<(),String> {
         if !self.p.commit.latched() { //not finalized?
             if !self.p.init.latched() { //has it been locked?
-                if strong_count(&self.p.data) < 2 { 
+                if Arc::strong_count(&self.p.data) < 2 {
                     return Err("safety hatch, promise not capable".to_string());
                 }
 
@@ -158,7 +157,7 @@ impl<T: Send+'static> Promisee<T> {
 
     pub fn get(&self) -> Result<Option<&T>,String> {
         if !self.p.init.latched() { //has it been locked?
-            if strong_count(&self.p.data) < 2 { 
+            if Arc::strong_count(&self.p.data) < 2 {
                 return Err("safety hatch, promise not capable".to_string());
             }
             else { Ok(None) } //promise is ok, but no data
