@@ -94,7 +94,7 @@ impl<T: Send+'static> Promise<T> {
 /// we don't want to hang readers on a local panic
 impl<T: Send+'static> Drop for Promise<T> {
     fn drop (&mut self) {
-        if Arc::strong_count(&self.data) < 3 { self.destroy(); }
+        if Arc::strong_count(&self.data) < 3 { let _ = self.destroy(); }
     }
 }
 
@@ -122,7 +122,7 @@ impl<T: Send+'static> Promiser<T> {
 
 impl<T: Send+'static> Drop for Promiser<T> {
     fn drop (&mut self) {
-        self.p.destroy();
+        let _ = self.p.destroy();
 
         self.wakeup();
     }
@@ -146,7 +146,7 @@ impl<T: Send+'static> Promisee<T> {
 
                 //todo: consider removing below ifstatement, atomicbool should take care of above logic
                 //might need to change latch to seqcst tho
-                self.sink.send(thread::current()); //signal promiser
+                let _ = self.sink.send(thread::current()); //signal promiser
                 if !self.p.commit.latched() { //check again!
                     thread::park();
                 }
