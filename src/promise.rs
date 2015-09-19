@@ -28,7 +28,7 @@ pub struct Promiser<T: Send+'static> {
 }
 
 unsafe impl<T: Send> Send for Promise<T> {}
-unsafe impl<T: Sync> Sync for Promise<T> {}
+unsafe impl<T: Sync + Send> Sync for Promise<T> {}
 
 impl<T: Send+'static> Promise<T> {
     pub fn new () -> (Promiser<T>,Promisee<T>) {
@@ -94,7 +94,9 @@ impl<T: Send+'static> Promise<T> {
 /// we don't want to hang readers on a local panic
 impl<T: Send+'static> Drop for Promise<T> {
     fn drop (&mut self) {
-        if Arc::strong_count(&self.data) < 3 { let _ = self.destroy(); }
+        if Arc::strong_count(&self.data) < 3 {
+            let _ =self.destroy();
+        }
     }
 }
 
@@ -220,8 +222,10 @@ mod tests {
     fn test_promise_threaded_panic_safely() {
         let (pt,pr) = Promise::new();
         thread::spawn (move || {
-            panic!("proc dead"); //destroys promise, triggers wake on main proc
-            pt.deliver(1);
+            if true {
+                panic!("proc dead"); //destroys promise, triggers wake on main proc
+            }
+            let _ = pt.deliver(1);
         });
         
         pr.with(|x| *x).unwrap();
@@ -231,23 +235,25 @@ mod tests {
     fn test_promise_threaded_panic_safely2() {
         let (pt,pr) = Promise::new();
         thread::spawn (move || {
-            panic!("proc dead"); //destroys promise, triggers wake on main proc
-            pt.deliver(1);
+            if true {
+                panic!("proc dead"); //destroys promise, triggers wake on main proc
+            }
+            assert!(pt.deliver(1));
         });
         
-        pr.get();
+        pr.get().ok();
     }
 
     #[bench]
     fn bench_promise_build(b: &mut test::Bencher) {
         b.iter(|| {
-            let (pt,pr) = Promise::<u8>::new();
+            let (_,_) = Promise::<u8>::new();
         });
     }
 
     #[bench]
     fn bench_promise_clone(b: &mut test::Bencher) {
-        let (pt,pr) = Promise::<u8>::new();
+        let (_,pr) = Promise::<u8>::new();
         b.iter(|| {
             pr.clone();
         });
@@ -260,7 +266,7 @@ mod tests {
         pt.deliver(bd); //delivery is a one shot deal
 
         b.iter(|| {
-            pr.with(|x| x[999]);
+            pr.with(|x| x[999]).ok();
         });
     }
     #[bench]
@@ -269,7 +275,7 @@ mod tests {
         let bd = vec![rand::random::<u64>();1000];
 
         b.iter(|| {
-            cs.send(bd.clone()); //must send each time w/ chan
+            cs.send(bd.clone()).ok(); //must send each time w/ chan
             cr.recv().unwrap()[999];
         });
     }
@@ -278,11 +284,11 @@ mod tests {
     fn bench_promise_multi(b: &mut test::Bencher) {
         b.iter(|| {
             let (pt,pr) = Promise::new();
-            let mut vpr = vec![pr.clone();10];
+            let vpr = vec![pr.clone();10];
             let bd = vec![rand::random::<u64>();1000];
             pt.deliver(bd);
             for n in vpr.iter() {
-                n.with(|x| x[999]);
+                n.with(|x| x[999]).ok();
             }
         });
     }
@@ -290,7 +296,7 @@ mod tests {
     fn bench_channel_multi(b: &mut test::Bencher) {
         let mut vcs = vec!();
         let mut vcr = vec!();
-        for n in (0..10) {
+        for _ in (0..10) {
             let (cs,cr) = channel::<Vec<u64>>();
             vcs.push(cs);
             vcr.push(cr);
@@ -298,7 +304,7 @@ mod tests {
         b.iter(|| {
             let bd = vec![rand::random::<u64>();1000];
             for cs in vcs.iter() {
-                cs.send(bd.clone());
+                cs.send(bd.clone()).ok();
             }
             for cr in vcr.iter(){
                 cr.recv().unwrap()[999];
