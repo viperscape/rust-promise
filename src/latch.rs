@@ -34,7 +34,6 @@ impl Latch {
 
 #[cfg(test)]
 mod tests {
-    extern crate test;
     use Latch;
     
     #[test]
@@ -46,13 +45,5 @@ mod tests {
         assert_eq!(l.latched(),true);
         assert_eq!(l.open(),true);
         assert_eq!(l.latched(),false);
-    }
-
-    #[bench]
-    fn bench_latch(b: &mut test::Bencher) {
-        b.iter(|| {
-            let l = Latch::new();
-            l.close();
-        });
     }
 }

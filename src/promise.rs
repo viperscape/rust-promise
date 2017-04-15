@@ -1,7 +1,5 @@
-extern crate alloc;
-
 use std::sync::{Arc};
-//use std::sync::atomic::{AtomicPtr,Ordering};
+
 use latch::Latch;
 use std::sync::mpsc::{channel,Sender,Receiver};
 use std::thread::{Thread};
@@ -189,13 +187,10 @@ impl<T: Send+'static> Promisee<T> {
 
 #[cfg(test)]
 mod tests {
-    extern crate test;
     extern crate rand;
     
     use Promise;
-    use std::sync::mpsc::channel;
     use std::thread;
-    use self::rand::random;
 
     #[test]
     fn test_promise_linear() {
@@ -242,74 +237,6 @@ mod tests {
         });
         
         pr.get().ok();
-    }
-
-    #[bench]
-    fn bench_promise_build(b: &mut test::Bencher) {
-        b.iter(|| {
-            let (_,_) = Promise::<u8>::new();
-        });
-    }
-
-    #[bench]
-    fn bench_promise_clone(b: &mut test::Bencher) {
-        let (_,pr) = Promise::<u8>::new();
-        b.iter(|| {
-            pr.clone();
-        });
-    }
-
-    #[bench]
-    fn bench_promise(b: &mut test::Bencher) {
-        let (pt,pr) = Promise::new();
-        let bd = vec![rand::random::<u64>();1000];
-        pt.deliver(bd); //delivery is a one shot deal
-
-        b.iter(|| {
-            pr.with(|x| x[999]).ok();
-        });
-    }
-    #[bench]
-    fn bench_channel(b: &mut test::Bencher) {
-        let (cs,cr) = channel::<Vec<u64>>();
-        let bd = vec![rand::random::<u64>();1000];
-
-        b.iter(|| {
-            cs.send(bd.clone()).ok(); //must send each time w/ chan
-            cr.recv().unwrap()[999];
-        });
-    }
-
-    #[bench]
-    fn bench_promise_multi(b: &mut test::Bencher) {
-        b.iter(|| {
-            let (pt,pr) = Promise::new();
-            let vpr = vec![pr.clone();10];
-            let bd = vec![rand::random::<u64>();1000];
-            pt.deliver(bd);
-            for n in vpr.iter() {
-                n.with(|x| x[999]).ok();
-            }
-        });
-    }
-    #[bench]
-    fn bench_channel_multi(b: &mut test::Bencher) {
-        let mut vcs = vec!();
-        let mut vcr = vec!();
-        for _ in (0..10) {
-            let (cs,cr) = channel::<Vec<u64>>();
-            vcs.push(cs);
-            vcr.push(cr);
-        }
-        b.iter(|| {
-            let bd = vec![rand::random::<u64>();1000];
-            for cs in vcs.iter() {
-                cs.send(bd.clone()).ok();
-            }
-            for cr in vcr.iter(){
-                cr.recv().unwrap()[999];
-            }
-        });
     }
 }
 
