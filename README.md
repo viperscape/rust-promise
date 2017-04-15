@@ -1,11 +1,8 @@
-rust-promise
+promiser
 ============
 
-for now use the git dependency in your Cargo.toml:
 ``` toml
-[dependencies.promise]
-
-git = "https://github.com/viperscape/rust-promise.git"
+promiser = "0.0.5"
 ```
 
 example usage:
