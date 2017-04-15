@@ -1,6 +1,6 @@
 [package]
 
-name = "promise"
+name = "promiser"
 version = "0.0.5"
 authors = ["Chris Gill"]
 description = "promise sync primitive"
