@@ -7,8 +7,8 @@ promiser = "0.0.5"
 
 example usage:
 ``` rust
-extern crate promise;
-use promise::Promise;
+extern crate promiser;
+use promiser::Promise;
 use std::rand;
 
 fn main () {
